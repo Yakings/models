@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ==============================================================================
-
 """Matches two images using their DELF features.
 
 The matching is done using feature-based nearest-neighbor search, followed by
@@ -26,17 +25,19 @@ from __future__ import division
 from __future__ import print_function
 
 import argparse
-from delf import feature_io
+import sys
+
 import matplotlib.image as mpimg
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.spatial import cKDTree
-from skimage.feature import plot_matches
-from skimage.measure import ransac
-from skimage.transform import AffineTransform
-import sys
+from scipy import spatial
+from skimage import feature
+from skimage import measure
+from skimage import transform
 import tensorflow as tf
+
 from tensorflow.python.platform import app
+from delf import feature_io
 
 cmd_args = None
 
@@ -57,36 +58,37 @@ def main(unused_argv):
   tf.logging.info("Loaded image 2's %d features" % num_features_2)
 
   # Find nearest-neighbor matches using a KD tree.
-  d1_tree = cKDTree(descriptors_1)
-  distances, indices = d1_tree.query(
+  d1_tree = spatial.cKDTree(descriptors_1)
+  _, indices = d1_tree.query(
       descriptors_2, distance_upper_bound=_DISTANCE_THRESHOLD)
 
   # Select feature locations for putative matches.
   locations_2_to_use = np.array([
-      locations_2[i,] for i in range(num_features_2)
+      locations_2[i,]
+      for i in range(num_features_2)
       if indices[i] != num_features_1
   ])
   locations_1_to_use = np.array([
-      locations_1[indices[i],] for i in range(num_features_2)
+      locations_1[indices[i],]
+      for i in range(num_features_2)
       if indices[i] != num_features_1
   ])
 
   # Perform geometric verification using RANSAC.
-  model_robust, inliers = ransac(
-      (locations_1_to_use, locations_2_to_use),
-      AffineTransform,
-      min_samples=3,
-      residual_threshold=20,
-      max_trials=1000)
+  _, inliers = measure.ransac((locations_1_to_use, locations_2_to_use),
+                              transform.AffineTransform,
+                              min_samples=3,
+                              residual_threshold=20,
+                              max_trials=1000)
 
   tf.logging.info('Found %d inliers' % sum(inliers))
 
   # Visualize correspondences, and save to file.
-  fig, ax = plt.subplots()
+  _, ax = plt.subplots()
   img_1 = mpimg.imread(cmd_args.image_1_path)
   img_2 = mpimg.imread(cmd_args.image_2_path)
   inlier_idxs = np.nonzero(inliers)[0]
-  plot_matches(
+  feature.plot_matches(
       ax,
       img_1,
       img_2,

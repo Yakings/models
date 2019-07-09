@@ -15,8 +15,10 @@
 
 """A function to build an object detection anchor generator from config."""
 
+from object_detection.anchor_generators import flexible_grid_anchor_generator
 from object_detection.anchor_generators import grid_anchor_generator
 from object_detection.anchor_generators import multiple_grid_anchor_generator
+from object_detection.anchor_generators import multiscale_grid_anchor_generator
 from object_detection.protos import anchor_generator_pb2
 
 
@@ -78,5 +80,30 @@ def build(anchor_generator_config):
         anchor_offsets=anchor_offsets,
         reduce_boxes_in_lowest_layer=(
             ssd_anchor_generator_config.reduce_boxes_in_lowest_layer))
+  elif anchor_generator_config.WhichOneof(
+      'anchor_generator_oneof') == 'multiscale_anchor_generator':
+    cfg = anchor_generator_config.multiscale_anchor_generator
+    return multiscale_grid_anchor_generator.MultiscaleGridAnchorGenerator(
+        cfg.min_level,
+        cfg.max_level,
+        cfg.anchor_scale,
+        [float(aspect_ratio) for aspect_ratio in cfg.aspect_ratios],
+        cfg.scales_per_octave,
+        cfg.normalize_coordinates
+    )
+  elif anchor_generator_config.WhichOneof(
+      'anchor_generator_oneof') == 'flexible_grid_anchor_generator':
+    cfg = anchor_generator_config.flexible_grid_anchor_generator
+    base_sizes = []
+    aspect_ratios = []
+    strides = []
+    offsets = []
+    for anchor_grid in cfg.anchor_grid:
+      base_sizes.append(tuple(anchor_grid.base_sizes))
+      aspect_ratios.append(tuple(anchor_grid.aspect_ratios))
+      strides.append((anchor_grid.height_stride, anchor_grid.width_stride))
+      offsets.append((anchor_grid.height_offset, anchor_grid.width_offset))
+    return flexible_grid_anchor_generator.FlexibleGridAnchorGenerator(
+        base_sizes, aspect_ratios, strides, offsets, cfg.normalize_coordinates)
   else:
     raise ValueError('Empty anchor generator.')
